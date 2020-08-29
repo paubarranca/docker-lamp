@@ -1,0 +1,70 @@
+version: '3.7'
+services:
+
+  traefik:
+    container_name: traefik
+    restart: always
+    image: traefik:v2.2
+    command:
+      --api
+      --global.sendAnonymousUsage=false
+      --entryPoints.http.address=:80
+      --entryPoints.https.address=:443
+      --certificatesresolvers.tls.acme.tlschallenge=true
+      --certificatesResolvers.tls.acme.storage=/etc/traefik/acme.json
+      --certificatesresolvers.tls.acme.httpchallenge=true
+      --certificatesResolvers.tls.acme.httpChallenge.entryPoint=http
+      --providers.docker=true
+      --providers.docker.exposedbydefault=false
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - /srv/traefik/:/etc/traefik/           
+    ports:
+      - "80:80"
+      - "443:443"
+    labels:
+      # http --> https global redirect
+      - "traefik.enable=true"
+      - "traefik.http.routers.http-catchall.rule=hostregexp(`{host:[a-z-.]+}`)"
+      - "traefik.http.routers.http-catchall.entrypoints=http"
+      - "traefik.http.routers.http-catchall.middlewares=redirect-to-https"
+      - "traefik.http.middlewares.redirect-to-https.redirectscheme.scheme=https"
+
+  {{ DOMAIN_USER }}:
+    container_name: {{ DOMAIN_USER }}
+    restart: always
+    image: paubarranca/debian-nginx-php:v7.3
+    volumes:
+      - /srv/nginx/www:/var/www/httpdocs
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.{{ DOMAIN_USER }}.rule=Host(`{{ DOMAIN_NAME }}`) || Host(`www.{{ DOMAIN_NAME }}`) 
+      - traefik.http.routers.{{ DOMAIN_USER }}.entrypoints=https
+      - traefik.http.routers.{{ DOMAIN_USER }}.tls=true
+      - traefik.http.routers.{{ DOMAIN_USER }}.tls.certresolver=tls
+      - traefik.http.routers.{{ DOMAIN_USER }}.middlewares=hsts
+      - traefik.http.middlewares.hsts.headers.stsincludesubdomains=false
+      - traefik.http.middlewares.hsts.headers.stspreload=true
+      - traefik.http.middlewares.hsts.headers.stsseconds=31536000
+      - traefik.http.middlewares.hsts.headers.isdevelopment=false
+
+  mysql:
+    container_name: mysql
+    restart: always
+    image: mysql:5.7
+    volumes:
+      - /srv/mysql/data:/var/lib/mysql
+    environment:
+      MYSQL_ROOT_PASSWORD: {{ MYSQL_ROOT_PASSWORD }}
+      MYSQL_DATABASE: {{ DOMAIN_USER }} 
+      MYSQL_USER: {{ DOMAIN_USER }}
+      MYSQL_PASSWORD: {{ MYSQL_USER_PASSWORD }}
+
+{% if CREATE_REDIS is defined and 'true' in CREATE_REDIS %}
+  redis:
+    container_name: redis
+    restart: always
+    image: paubarranca/redis:v1
+    ports:
+      - "6379:6379"
+{% endif %}
