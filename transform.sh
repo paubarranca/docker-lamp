@@ -16,8 +16,8 @@ create_volumes() {
 }
 
 pre_transform_actions() {
+    COMPOSE_FILE=/root/init/docker-compose.yml
     if [ -e $COMPOSE_FILE ]; then
-        COMPOSE_FILE=/root/init/docker-compose.yml
         TMP_COMPOSE_FILE=/tmp/docker-compose-pre-transform.yml
 
         read -p "\n$COMPOSE_FILE already exists, do you want to overwrite it? (y/n) " RESPONSE
